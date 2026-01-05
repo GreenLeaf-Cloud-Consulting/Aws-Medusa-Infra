@@ -1,0 +1,22 @@
+name: Task
+description: Tâche technique
+title: "[TASK] "
+labels: ["task", "P2", "S"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      placeholder: Que faut-il faire ?
+    validations:
+      required: true
+
+  - type: textarea
+    id: checklist
+    attributes:
+      label: Checklist
+      placeholder: |
+        - [ ] Étape 1
+        - [ ] Étape 2
+      value: |
+        - [ ]

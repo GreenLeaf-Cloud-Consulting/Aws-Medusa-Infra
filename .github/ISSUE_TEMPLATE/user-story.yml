@@ -1,0 +1,38 @@
+name: User Story
+description: Fonctionnalité du point de vue utilisateur
+title: "[US] "
+labels: ["user-story", "P2", "M"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## User Story
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: User Story
+      placeholder: |
+        En tant que **[rôle]**,
+        Je veux **[action]**,
+        Afin de **[bénéfice]**.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Critères d'acceptation
+      placeholder: |
+        - [ ] Critère 1
+        - [ ] Critère 2
+      value: |
+        - [ ] 
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes techniques
+      placeholder: Contraintes, dépendances, design, etc.

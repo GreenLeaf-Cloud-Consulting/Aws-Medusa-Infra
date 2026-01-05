@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussion ou Question
+    url: https://github.com/Soluweld/front-end/discussions
+    about: Pour poser des questions ou discuter d'idées

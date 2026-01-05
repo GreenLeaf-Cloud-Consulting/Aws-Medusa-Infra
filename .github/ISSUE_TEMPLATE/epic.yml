@@ -1,0 +1,34 @@
+name: Epic
+description: Grande fonctionnalité décomposée en plusieurs user stories
+title: "[EPIC] "
+labels: ["epic", "P1", "XL"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Epic - Fonctionnalité majeure
+
+  - type: input
+    id: epic-title
+    attributes:
+      label: Titre de l'epic
+      placeholder: "Ex: Système d'authentification"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Vue d'ensemble et objectif de l'epic
+      placeholder: |
+        Décris l'objectif global de cet epic et pourquoi il est important.
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-notes
+    attributes:
+      label: Notes techniques (optionnel)
+      placeholder: |
+        Contraintes, dépendances, technologies à utiliser, etc.
