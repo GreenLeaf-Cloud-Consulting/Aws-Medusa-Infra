@@ -1,0 +1,205 @@
+---
+- name: Installation et configuration du serveur
+  hosts: web
+  become: yes
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Install dependencies for Docker Compose
+      apt:
+        name:
+          - curl
+          - python3-pip
+        state: present
+
+    - name: Start and enable Nginx service
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Ajouter l'utilisateur actuel au groupe docker
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Télécharger la dernière version de Docker Compose
+      shell: >
+        curl -sSL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)"
+        -o /usr/local/bin/docker-compose
+      args:
+        creates: /usr/local/bin/docker-compose
+
+    - name: Appliquer les permissions à Docker Compose
+      file:
+        path: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Vérifier l'installation de Docker Compose
+      command: docker-compose --version
+      register: docker_compose_version
+      changed_when: false
+
+    - name: Afficher la version de Docker Compose installée
+      debug:
+        msg: "Docker Compose installé : {{ docker_compose_version.stdout }}"
+
+    - name: Générer une clé SSH pour GitHub
+      openssh_keypair:
+        path: "/home/{{ ansible_user }}/.ssh/id_rsa"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        size: 4096
+        type: rsa
+        state: present
+
+    - name: Lire la clé publique du serveur
+      command: cat /home/{{ ansible_user }}/.ssh/id_rsa.pub
+      register: ssh_public_key
+      changed_when: false
+
+    - name: Ajouter la clé SSH du serveur à GitHub
+      uri:
+        url: "https://api.github.com/user/keys"
+        method: POST
+        headers:
+          Authorization: "token {{ github_token }}"
+          Accept: "application/vnd.github.v3+json"
+        body_format: json
+        body:
+          title: "SSH Key from {{ inventory_hostname }}"
+          key: "{{ ssh_public_key.stdout }}"
+        status_code: [201, 422]
+      delegate_to: localhost
+      become: no
+
+    - name: Ajouter GitHub aux hôtes connus
+      shell: ssh-keyscan github.com >> /home/{{ ansible_user }}/.ssh/known_hosts
+      args:
+        creates: /home/{{ ansible_user }}/.ssh/known_hosts
+
+    - name: Cloner le repository Git privé
+      git:
+        repo: "git@github.com:vitolinho/dev-ops.git"
+        dest: "/home/{{ ansible_user }}/dev-ops"
+        version: main
+        accept_hostkey: yes
+        key_file: "/home/{{ ansible_user }}/.ssh/id_rsa"
+      become_user: "{{ ansible_user }}"
+
+    - name: Modifier le fichier .env en fonction de la région
+      lineinfile:
+        path: "/home/{{ ansible_user }}/dev-ops/api/.env"
+        regexp: "^PRIMARY_REPLICA="
+        line: "PRIMARY_REPLICA={% if 'france' in inventory_hostname %}1{% else %}0{% endif %}"
+      become: yes
+
+    - name: Modifier le fichier .env pour REPLICA_REPLICA en fonction de la région
+      lineinfile:
+        path: "/home/{{ ansible_user }}/dev-ops/api/.env"
+        regexp: "^REPLICA_REPLICA="
+        line: "REPLICA_REPLICA={% if 'germany' in inventory_hostname %}1{% else %}0{% endif %}"
+      become: yes
+
+    - name: Copier le fichier .env dans le dossier API
+      copy:
+        src: "../../api/.env
+        dest: "/home/{{ ansible_user }}/dev-ops/api/.env"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Vérifier si NVM est installé
+      stat:
+        path: "/home/{{ ansible_user }}/.nvm/nvm.sh"
+      register: nvm_status
+
+    - name: Installer NVM si non installé
+      shell: >
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.4/install.sh | bash
+      args:
+        creates: "/home/{{ ansible_user }}/.nvm/nvm.sh"
+      become_user: "{{ ansible_user }}"
+      when: nvm_status.stat is defined and not nvm_status.stat.exist
+
+
+    - name: Ajouter NVM à .bashrc et .profile
+      blockinfile:
+        path: "/home/{{ ansible_user }}/.bashrc"
+        block: |
+          export NVM_DIR="/home/{{ ansible_user }}/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+      become_user: "{{ ansible_user }}"
+
+    - name: Ajouter NVM à .profile
+      blockinfile:
+        path: "/home/{{ ansible_user }}/.profile"
+        block: |
+          export NVM_DIR="/home/{{ ansible_user }}/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+      become_user: "{{ ansible_user }}"
+
+    - name: Charger NVM et Installer Node.js
+      shell: |
+        export NVM_DIR="/home/{{ ansible_user }}/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+        nvm install --lts
+        nvm alias default lts/*
+      args:
+        executable: /bin/bash
+      become_user: "{{ ansible_user }}"
+
+    - name: Lancer Make up pour démarrer les conteneurs Docker
+      command: make up
+      args:
+        chdir: "/home/{{ ansible_user }}/dev-ops/api"
+      register: make_output
+      changed_when: false
+
+    - name: Afficher la sortie de Make up
+      debug:
+        msg: "{{ make_output.stdout }}"
+
+    - name: Installer les dépendances du front-end avec npm install
+      shell: |
+        export NVM_DIR="/home/{{ ansible_user }}/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+        npm install
+      args:
+        chdir: "/home/{{ ansible_user }}/dev-ops/client"
+        executable: /bin/bash
+      become_user: "{{ ansible_user }}"
+
+    - name: Démarrer le build du front-end avec npm run dev en arrière-plan
+      shell: |
+        export NVM_DIR="/home/{{ ansible_user }}/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+        nohup npm run dev --host > /home/{{ ansible_user }}/dev-ops/client/frontend.log 2>&1 &
+      args:
+        chdir: "/home/{{ ansible_user }}/dev-ops/client"
+        executable: /bin/bash
+      become_user: "{{ ansible_user }}"
