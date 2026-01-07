@@ -26,3 +26,8 @@ build
 .terraform/
 .medusaterraform.tfvars
 terraform/ansible/vars.yml
+
+terraform.tfstate
+terraform/keys/*
+terraform/ansible/inventory
+terraform/.terraform.lock.hcl

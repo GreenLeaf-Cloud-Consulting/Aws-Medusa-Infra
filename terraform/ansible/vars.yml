@@ -1,1 +1,3 @@
-github_token : "YOUR_GITHUB_TOKEN"
+github_token: "AJOUTEZ_VOTRE_TOKEN_GITHUB"
+admin_email: "admin@example.com"
+admin_password: "ChangeThisPassword123!"

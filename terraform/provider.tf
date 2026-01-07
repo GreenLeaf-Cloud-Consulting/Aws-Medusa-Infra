@@ -12,3 +12,17 @@ provider "aws" {
   access_key = var.aws_access_key
   secret_key = var.aws_secret_key
 }
+
+provider "aws" {
+  alias      = "france"
+  region     = "eu-west-3"
+  access_key = var.aws_access_key
+  secret_key = var.aws_secret_key
+}
+
+provider "aws" {
+  alias      = "germany"
+  region     = "eu-central-1"
+  access_key = var.aws_access_key
+  secret_key = var.aws_secret_key
+}

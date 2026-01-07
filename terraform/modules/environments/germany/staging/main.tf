@@ -5,7 +5,7 @@ data "aws_vpc" "default" {
 module "ec2" {
   instance_name   = "germany-instance"
   source          = "../../../ec2-instance"
-  ami             = "ami-0584590e5f0e97daa"
+  ami             = "ami-06c431709bcd3b51d"
   instance_type   = "t2.small"
   environment     = "staging"
   allowed_ports   = [22, 80, 443]
