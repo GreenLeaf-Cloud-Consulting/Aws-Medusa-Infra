@@ -10,22 +10,15 @@
       apt:
         update_cache: yes
 
-    - name: Install Nginx
-      apt:
-        name: nginx
-        state: present
-
-    - name: Install Docker
-      apt:
-        name: docker.io
-        state: present
-
-    - name: Install dependencies for Docker Compose
+    - name: Installer tous les paquets nécessaires en une seule fois
       apt:
         name:
+          - nginx
+          - docker.io
           - curl
           - python3-pip
         state: present
+        update_cache: no
 
     - name: Start and enable Nginx service
       service:
@@ -45,20 +38,37 @@
         groups: docker
         append: yes
 
-    - name: Télécharger la dernière version de Docker Compose
+    - name: Changer les permissions du socket Docker
+      file:
+        path: /var/run/docker.sock
+        owner: root
+        group: docker
+        mode: "0660"
+      become: yes
+
+    - name: Reset SSH connection to apply docker group membership
+      meta: reset_connection
+
+    - name: Créer le répertoire pour les plugins Docker CLI
+      file:
+        path: /usr/local/lib/docker/cli-plugins
+        state: directory
+        mode: "0755"
+
+    - name: Télécharger Docker Compose v2 en tant que plugin
       shell: >
         curl -sSL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)"
-        -o /usr/local/bin/docker-compose
+        -o /usr/local/lib/docker/cli-plugins/docker-compose
       args:
-        creates: /usr/local/bin/docker-compose
+        creates: /usr/local/lib/docker/cli-plugins/docker-compose
 
     - name: Appliquer les permissions à Docker Compose
       file:
-        path: /usr/local/bin/docker-compose
-        mode: '0755'
+        path: /usr/local/lib/docker/cli-plugins/docker-compose
+        mode: "0755"
 
-    - name: Vérifier l'installation de Docker Compose
-      command: docker-compose --version
+    - name: Vérifier l'installation de Docker Compose v2
+      command: docker compose version
       register: docker_compose_version
       changed_when: false
 
@@ -102,81 +112,44 @@
 
     - name: Cloner le repository Git privé
       git:
-        repo: "git@github.com:vitolinho/dev-ops.git"
-        dest: "/home/{{ ansible_user }}/dev-ops"
+        repo: "git@github.com:GreenLeaf-Cloud-Consulting/Aws-Medusa-Infra.git"
+        dest: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
         version: main
         accept_hostkey: yes
         key_file: "/home/{{ ansible_user }}/.ssh/id_rsa"
       become_user: "{{ ansible_user }}"
 
-    - name: Modifier le fichier .env en fonction de la région
-      lineinfile:
-        path: "/home/{{ ansible_user }}/dev-ops/api/.env"
-        regexp: "^PRIMARY_REPLICA="
-        line: "PRIMARY_REPLICA={% if 'france' in inventory_hostname %}1{% else %}0{% endif %}"
-      become: yes
-
-    - name: Modifier le fichier .env pour REPLICA_REPLICA en fonction de la région
-      lineinfile:
-        path: "/home/{{ ansible_user }}/dev-ops/api/.env"
-        regexp: "^REPLICA_REPLICA="
-        line: "REPLICA_REPLICA={% if 'germany' in inventory_hostname %}1{% else %}0{% endif %}"
-      become: yes
-
-    - name: Copier le fichier .env dans le dossier API
-      copy:
-        src: "../../api/.env
-        dest: "/home/{{ ansible_user }}/dev-ops/api/.env"
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: '0644'
-
-    - name: Vérifier si NVM est installé
-      stat:
-        path: "/home/{{ ansible_user }}/.nvm/nvm.sh"
-      register: nvm_status
-
-    - name: Installer NVM si non installé
-      shell: >
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.4/install.sh | bash
-      args:
-        creates: "/home/{{ ansible_user }}/.nvm/nvm.sh"
-      become_user: "{{ ansible_user }}"
-      when: nvm_status.stat is defined and not nvm_status.stat.exist
-
-
-    - name: Ajouter NVM à .bashrc et .profile
-      blockinfile:
-        path: "/home/{{ ansible_user }}/.bashrc"
-        block: |
-          export NVM_DIR="/home/{{ ansible_user }}/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-      become_user: "{{ ansible_user }}"
-
-    - name: Ajouter NVM à .profile
-      blockinfile:
-        path: "/home/{{ ansible_user }}/.profile"
-        block: |
-          export NVM_DIR="/home/{{ ansible_user }}/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-      become_user: "{{ ansible_user }}"
-
-    - name: Charger NVM et Installer Node.js
+    - name: Ajouter le repository NodeSource pour Node.js LTS
       shell: |
-        export NVM_DIR="/home/{{ ansible_user }}/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-        nvm install --lts
-        nvm alias default lts/*
+        curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
       args:
-        executable: /bin/bash
+        creates: /etc/apt/sources.list.d/nodesource.list
+      become: yes
+
+    - name: Installer Node.js et npm
+      apt:
+        name: nodejs
+        state: present
+        update_cache: yes
+      become: yes
+
+    - name: Installer pnpm globalement
+      npm:
+        name: pnpm
+        global: yes
+      become: yes
+
+    - name: Installer les dépendances du projet avec pnpm
+      shell: pnpm install
+      args:
+        chdir: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
       become_user: "{{ ansible_user }}"
 
-    - name: Lancer Make up pour démarrer les conteneurs Docker
-      command: make up
+    - name: Lancer Docker Compose pour démarrer les conteneurs
+      shell: pnpm run docker:up
       args:
-        chdir: "/home/{{ ansible_user }}/dev-ops/api"
+        chdir: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
+      become_user: "{{ ansible_user }}"
       register: make_output
       changed_when: false
 
@@ -184,22 +157,34 @@
       debug:
         msg: "{{ make_output.stdout }}"
 
-    - name: Installer les dépendances du front-end avec npm install
+    - name: Attendre que le backend soit prêt
+      wait_for:
+        port: 9000
+        delay: 10
+        timeout: 120
+        host: localhost
+
+    - name: Créer fichier .env dans le conteneur pour DATABASE_URL
       shell: |
-        export NVM_DIR="/home/{{ ansible_user }}/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-        npm install
+        docker exec medusa_backend sh -c 'cat > /server/.env << EOF
+        DATABASE_URL=postgres://postgres:postgres@postgres:5432/medusa-store
+        REDIS_URL=redis://redis:6379
+        NODE_ENV=development
+        EOF'
       args:
-        chdir: "/home/{{ ansible_user }}/dev-ops/client"
-        executable: /bin/bash
+        chdir: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
       become_user: "{{ ansible_user }}"
 
-    - name: Démarrer le build du front-end avec npm run dev en arrière-plan
-      shell: |
-        export NVM_DIR="/home/{{ ansible_user }}/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-        nohup npm run dev --host > /home/{{ ansible_user }}/dev-ops/client/frontend.log 2>&1 &
+    - name: Setup de la base de données Medusa
+      shell: docker exec medusa_backend npx medusa db:setup
       args:
-        chdir: "/home/{{ ansible_user }}/dev-ops/client"
-        executable: /bin/bash
+        chdir: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
       become_user: "{{ ansible_user }}"
+      ignore_errors: yes
+
+    - name: Créer un utilisateur admin Medusa
+      shell: docker exec medusa_backend npx medusa user -e {{ admin_email }} -p {{ admin_password }}
+      args:
+        chdir: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
+      become_user: "{{ ansible_user }}"
+      ignore_errors: yes

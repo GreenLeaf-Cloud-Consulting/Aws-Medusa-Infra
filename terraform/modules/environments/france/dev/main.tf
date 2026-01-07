@@ -6,10 +6,11 @@ module "ec2" {
   instance_name   = "france-instance"
   source          = "../../../ec2-instance"
   ami             = "ami-0359cb6c0c97c6607"
-  instance_type   = "t2.micro"
+  instance_type   = "t3.medium"
   environment     = "dev"
   allowed_ports   = [22, 80]
   region          = "eu-west-3"
+  ssh_user        = "admin"
 }
 
 resource "aws_eip" "dev_eip" {

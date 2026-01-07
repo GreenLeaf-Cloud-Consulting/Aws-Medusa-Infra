@@ -9,7 +9,8 @@ module "ec2" {
   instance_type   = "t2.micro"
   environment     = "dev"
   allowed_ports   = [22, 80]
-  region          = "eu-central-1"
+  region          = "eu-central-1"  
+  ssh_user        = "admin"
 }
 
 output "instance_ip" {

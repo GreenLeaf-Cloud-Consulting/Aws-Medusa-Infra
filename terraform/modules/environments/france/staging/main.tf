@@ -10,6 +10,7 @@ module "ec2" {
   environment     = "staging"
   allowed_ports   = [22, 80, 443]
   region          = "eu-west-3"
+  ssh_user        = "admin"
 }
 
 output "instance_ip" {

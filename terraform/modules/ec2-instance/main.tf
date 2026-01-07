@@ -20,6 +20,13 @@ resource "aws_instance" "debian_instance" {
   key_name               = aws_key_pair.generated_key.key_name
   vpc_security_group_ids = [aws_security_group.instance_sg.id]
 
+  root_block_device {
+    volume_size           = 20
+    volume_type           = "gp3"
+    delete_on_termination = true
+    encrypted             = true
+  }
+
   tags = {
     Environment = var.environment
     Name        = "Instance-${var.environment}"
@@ -63,9 +70,6 @@ resource "aws_instance" "debian_instance" {
   }
 }
 
-provider "aws" {
-  region = var.region
-}
 
 resource "local_file" "ssh_private_key" {
   content  = tls_private_key.ssh_key.private_key_pem

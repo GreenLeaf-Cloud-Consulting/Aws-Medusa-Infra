@@ -10,6 +10,7 @@ module "ec2" {
   environment     = "prod"
   allowed_ports   = [22, 443]
   region          = "eu-west-3"
+  ssh_user        = "admin"
 }
 
 output "instance_ip" {

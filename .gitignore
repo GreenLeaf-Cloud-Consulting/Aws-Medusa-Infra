@@ -23,4 +23,6 @@ build
 !.yarn/sdks
 !.yarn/versions
 
-.medusa
+.terraform/
+.medusaterraform.tfvars
+terraform/ansible/vars.yml
