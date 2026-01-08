@@ -1,0 +1,36 @@
+---
+- name: Mettre à jour la configuration CORS du backend Medusa
+  hosts: web
+  become: yes
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Mettre à jour le fichier .env avec les CORS
+      shell: |
+        docker exec medusa_backend sh -c 'cat > /server/.env << EOF
+        DATABASE_URL=postgres://postgres:postgres@postgres:5432/medusa-store
+        REDIS_URL=redis://redis:6379
+        NODE_ENV=development
+        STORE_CORS=http://{{ frontend_ip }},http://{{ frontend_ip }}:80
+        ADMIN_CORS=http://{{ frontend_ip }},http://{{ frontend_ip }}:80
+        AUTH_CORS=http://{{ frontend_ip }},http://{{ frontend_ip }}:80
+        JWT_SECRET=supersecret
+        COOKIE_SECRET=supersecret
+        EOF'
+      args:
+        chdir: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
+      become_user: "{{ ansible_user }}"
+
+    - name: Redémarrer le backend pour appliquer les changements CORS
+      shell: docker restart medusa_backend
+      args:
+        chdir: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
+      become_user: "{{ ansible_user }}"
+
+    - name: Attendre que le backend redémarre
+      wait_for:
+        port: 9000
+        delay: 5
+        timeout: 60
+        host: localhost

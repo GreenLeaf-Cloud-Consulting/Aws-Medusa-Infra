@@ -28,3 +28,27 @@ variable "instance_name" {
   description = "The name of the instance"
   type        = string
 }
+
+variable "ansible_playbook" {
+  description = "The Ansible playbook to use for provisioning"
+  type        = string
+  default     = "playbook.yml"
+}
+
+variable "backend_ip" {
+  description = "Backend IP address for frontend instances"
+  type        = string
+  default     = ""
+}
+
+variable "frontend_ip" {
+  description = "Frontend IP address for backend CORS configuration"
+  type        = string
+  default     = ""
+}
+
+variable "use_elastic_ip" {
+  description = "Whether to allocate an Elastic IP for this instance"
+  type        = bool
+  default     = false
+}

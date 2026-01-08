@@ -1,3 +1,4 @@
-github_token: "AJOUTEZ_VOTRE_TOKEN_GITHUB"
+github_token: ""
 admin_email: "admin@example.com"
-admin_password: "ChangeThisPassword123!"
+admin_password: "Admin123!"
+medusa_publishable_key: "pk_default_key"
