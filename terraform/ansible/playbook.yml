@@ -170,6 +170,10 @@
         DATABASE_URL=postgres://postgres:postgres@postgres:5432/medusa-store
         REDIS_URL=redis://redis:6379
         NODE_ENV=development
+        {% if frontend_ip is defined %}
+        STORE_CORS=http://{{ frontend_ip }}:3000,http://{{ frontend_ip }}
+        ADMIN_CORS=http://{{ frontend_ip }}:3000,http://{{ frontend_ip }}
+        {% endif %}
         EOF'
       args:
         chdir: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
@@ -188,3 +192,120 @@
         chdir: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
       become_user: "{{ ansible_user }}"
       ignore_errors: yes
+
+    - name: Attendre 30 secondes que le backend soit complètement prêt
+      pause:
+        seconds: 30
+
+    - name: S'authentifier à l'API Medusa et obtenir le token JWT
+      uri:
+        url: "http://localhost:9000/auth/user/emailpass"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          email: "{{ admin_email }}"
+          password: "{{ admin_password }}"
+        status_code: 200
+        return_content: yes
+      register: auth_response
+      retries: 5
+      delay: 10
+      until: auth_response is succeeded
+
+    - name: Extraire le token JWT
+      set_fact:
+        jwt_token: "{{ auth_response.json.token }}"
+
+    - name: Récupérer les API keys existantes depuis l'API Medusa
+      uri:
+        url: "http://localhost:9000/admin/api-keys"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ jwt_token }}"
+          Content-Type: "application/json"
+        status_code: 200
+        return_content: yes
+      register: api_keys_response
+      retries: 3
+      delay: 5
+      until: api_keys_response is succeeded
+
+    - name: Extraire la première publishable key depuis la réponse API
+      set_fact:
+        medusa_publishable_key: "{{ api_keys_response.json.api_keys[0].token }}"
+      when: api_keys_response.json.api_keys | length > 0
+
+    - name: Afficher la publishable key
+      debug:
+        msg: "Publishable Key: {{ medusa_publishable_key }}"
+
+    - name: Créer répertoire /var/www/html si nécessaire
+      file:
+        path: /var/www/html
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+      become: yes
+
+    - name: Sauvegarder la publishable key dans un fichier public
+      copy:
+        content: "{{ medusa_publishable_key | default('pk_01JGXXXXXXXXXXX', true) }}"
+        dest: "/var/www/html/publishable-key.txt"
+        owner: www-data
+        group: www-data
+        mode: '0644'
+      become: yes
+
+    - name: Configurer Nginx comme reverse proxy pour Medusa
+      copy:
+        dest: /etc/nginx/sites-available/medusa-backend
+        content: |
+          server {
+              listen 80;
+              server_name {{ ansible_host }};
+
+              # Servir le fichier de clé publique
+              location /publishable-key.txt {
+                  root /var/www/html;
+                  try_files $uri =404;
+              }
+
+              # Proxy vers Medusa pour tout le reste
+              location / {
+                  proxy_pass http://localhost:9000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+
+    - name: Activer le site Nginx pour le backend
+      file:
+        src: /etc/nginx/sites-available/medusa-backend
+        dest: /etc/nginx/sites-enabled/medusa-backend
+        state: link
+      become: yes
+
+    - name: Supprimer le site Nginx par défaut
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      become: yes
+
+    - name: Recharger Nginx
+      systemd:
+        name: nginx
+        state: reloaded
+      become: yes

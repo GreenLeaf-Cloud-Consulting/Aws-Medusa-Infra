@@ -31,3 +31,4 @@ terraform.tfstate
 terraform/keys/*
 terraform/ansible/inventory
 terraform/.terraform.lock.hcl
+terraform/terraform.tfstate.backup

@@ -1,0 +1,245 @@
+---
+- name: Installation et configuration du serveur frontend Next.js
+  hosts: web
+  become: yes
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Installer tous les paquets nécessaires
+      apt:
+        name:
+          - nginx
+          - curl
+          - git
+          - python3-pip
+        state: present
+        update_cache: no
+
+    - name: Start and enable Nginx service
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Générer une clé SSH pour GitHub
+      openssh_keypair:
+        path: "/home/{{ ansible_user }}/.ssh/id_rsa"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        size: 4096
+        type: rsa
+        state: present
+
+    - name: Lire la clé publique du serveur
+      command: cat /home/{{ ansible_user }}/.ssh/id_rsa.pub
+      register: ssh_public_key
+      changed_when: false
+
+    - name: Ajouter la clé SSH du serveur à GitHub
+      uri:
+        url: "https://api.github.com/user/keys"
+        method: POST
+        headers:
+          Authorization: "token {{ github_token }}"
+          Accept: "application/vnd.github.v3+json"
+        body_format: json
+        body:
+          title: "SSH Key Frontend from {{ inventory_hostname }}"
+          key: "{{ ssh_public_key.stdout }}"
+        status_code: [201, 422]
+      delegate_to: localhost
+      become: no
+
+    - name: Ajouter GitHub aux hôtes connus
+      shell: ssh-keyscan github.com >> /home/{{ ansible_user }}/.ssh/known_hosts
+      args:
+        creates: /home/{{ ansible_user }}/.ssh/known_hosts
+
+    - name: Ajouter le repository NodeSource pour Node.js LTS
+      shell: |
+        curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+      become: yes
+
+    - name: Installer Node.js et npm
+      apt:
+        name: nodejs
+        state: present
+        update_cache: yes
+      become: yes
+
+    - name: Installer pnpm globalement
+      npm:
+        name: pnpm
+        global: yes
+      become: yes
+
+    - name: Cloner le repository Next.js Medusa Starter
+      git:
+        repo: "https://github.com/medusajs/nextjs-starter-medusa.git"
+        dest: "/home/{{ ansible_user }}/nextjs-starter-medusa"
+        version: main
+        accept_hostkey: yes
+      become_user: "{{ ansible_user }}"
+
+    - name: Récupérer la publishable key depuis le backend
+      uri:
+        url: "http://{{ backend_ip }}/publishable-key.txt"
+        return_content: yes
+        timeout: 10
+      register: publishable_key_response
+      retries: 3
+      delay: 5
+      until: publishable_key_response.status == 200
+      ignore_errors: yes
+      failed_when: false
+
+    - name: Définir la publishable key
+      set_fact:
+        medusa_publishable_key: "{{ publishable_key_response.content | trim if (publishable_key_response is defined and publishable_key_response.status == 200) else medusa_publishable_key }}"
+
+    - name: Créer le fichier .env.local pour le frontend
+      copy:
+        dest: "/home/{{ ansible_user }}/nextjs-starter-medusa/.env.local"
+        content: |
+          NEXT_PUBLIC_MEDUSA_BACKEND_URL=http://{{ backend_ip }}:9000
+          NEXT_PUBLIC_BASE_URL=http://{{ ansible_host }}
+          NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY={{ medusa_publishable_key }}
+          REVALIDATE_SECRET=supersecret
+          MEDUSA_BACKEND_URL=http://{{ backend_ip }}:9000
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Installer les dépendances du projet avec pnpm
+      shell: pnpm install
+      args:
+        chdir: "/home/{{ ansible_user }}/nextjs-starter-medusa"
+      become_user: "{{ ansible_user }}"
+
+    - name: Créer configuration Next.js pour build sans pre-fetch
+      copy:
+        dest: "/home/{{ ansible_user }}/nextjs-starter-medusa/.env.production"
+        content: |
+          NEXT_PUBLIC_MEDUSA_BACKEND_URL=http://{{ backend_ip }}:9000
+          NEXT_PUBLIC_BASE_URL=http://{{ ansible_host }}
+          NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY={{ medusa_publishable_key }}
+          REVALIDATE_SECRET=supersecret
+          SKIP_ENV_VALIDATION=true
+          MEDUSA_BACKEND_URL=http://{{ backend_ip }}:9000
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Build du projet Next.js
+      shell: pnpm build
+      args:
+        chdir: "/home/{{ ansible_user }}/nextjs-starter-medusa"
+      become_user: "{{ ansible_user }}"
+      environment:
+        NEXT_PUBLIC_MEDUSA_BACKEND_URL: "http://{{ backend_ip }}:9000"
+        NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY: "{{ medusa_publishable_key }}"
+        NEXT_TELEMETRY_DISABLED: "1"
+        SKIP_ENV_VALIDATION: "true"
+      ignore_errors: yes
+      failed_when: false
+
+    - name: Créer le service systemd pour le frontend Next.js
+      copy:
+        dest: /etc/systemd/system/nextjs-frontend.service
+        content: |
+          [Unit]
+          Description=Next.js Frontend for Medusa
+          After=network.target
+
+          [Service]
+          Type=simple
+          User={{ ansible_user }}
+          WorkingDirectory=/home/{{ ansible_user }}/nextjs-starter-medusa
+          ExecStart=/usr/bin/pnpm start
+          Restart=on-failure
+          Environment=NODE_ENV=production
+          Environment=PORT=8000
+
+          [Install]
+          WantedBy=multi-user.target
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+      become: yes
+
+    - name: Démarrer et activer le service Next.js
+      systemd:
+        name: nextjs-frontend
+        state: started
+        enabled: yes
+      become: yes
+
+    - name: Configurer Nginx comme reverse proxy pour Next.js
+      copy:
+        dest: /etc/nginx/sites-available/nextjs-frontend
+        content: |
+          server {
+              listen 80;
+              server_name {{ ansible_host }};
+
+              location / {
+                  proxy_pass http://localhost:8000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+
+    - name: Activer le site Nginx
+      file:
+        src: /etc/nginx/sites-available/nextjs-frontend
+        dest: /etc/nginx/sites-enabled/nextjs-frontend
+        state: link
+      become: yes
+
+    - name: Supprimer le site Nginx par défaut
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      become: yes
+
+    - name: Vérifier la configuration Nginx
+      command: nginx -t
+      become: yes
+      changed_when: false
+
+    - name: Recharger Nginx
+      systemd:
+        name: nginx
+        state: reloaded
+      become: yes
+
+    - name: Attendre que le frontend soit prêt
+      wait_for:
+        port: 8000
+        delay: 5
+        timeout: 60
+        host: localhost
+      ignore_errors: yes
+      failed_when: false
