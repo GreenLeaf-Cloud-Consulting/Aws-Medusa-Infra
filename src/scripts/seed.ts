@@ -70,6 +70,7 @@ export default async function seedDemoData({ container }: ExecArgs) {
     input: {
       selector: { id: store.id },
       update: {
+        name: "GreenLeaf",
         supported_locales: [
           {
             locale_code: "fr-FR"

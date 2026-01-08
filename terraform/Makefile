@@ -267,3 +267,21 @@ ssh-dev-france-backend-instance:
 ssh-dev-france-frontend-instance:
 	ssh -i ./keys/dev-france-frontend-instance-key.pem admin@52.47.213.255
 
+ssh-prod-france-backend-instance:
+	ssh -i ./keys/prod-france-backend-instance-key.pem admin@35.180.92.58
+
+ssh-prod-france-backend-instance:
+	ssh -i ./keys/prod-france-backend-instance-key.pem admin@35.180.92.58
+
+ssh-prod-france-backend-instance:
+	ssh -i ./keys/prod-france-backend-instance-key.pem admin@35.180.92.58
+
+ssh-prod-france-frontend-instance:
+	ssh -i ./keys/prod-france-frontend-instance-key.pem admin@13.38.118.195
+
+ssh-prod-france-backend-instance:
+	ssh -i ./keys/prod-france-backend-instance-key.pem admin@15.236.73.143
+
+ssh-prod-france-frontend-instance:
+	ssh -i ./keys/prod-france-frontend-instance-key.pem admin@15.188.220.31
+

@@ -5,8 +5,8 @@ data "aws_vpc" "default" {
 module "ec2_backend" {
   instance_name    = "france-backend-instance"
   source           = "../../../ec2-instance"
-  ami              = "ami-0359cb6c0c97c6607"
-  instance_type    = "t3.medium"
+  ami              = "ami-0256daaa9dbc8ea3c"
+  instance_type    = "t4g.small"
   environment      = "dev"
   allowed_ports    = [22, 80, 9000]
   region           = "eu-west-3"
@@ -18,8 +18,8 @@ module "ec2_backend" {
 module "ec2_frontend" {
   instance_name    = "france-frontend-instance"
   source           = "../../../ec2-instance"
-  ami              = "ami-0359cb6c0c97c6607"
-  instance_type    = "t3.medium"
+  ami              = "ami-0256daaa9dbc8ea3c"
+  instance_type    = "t4g.small"
   environment      = "dev"
   allowed_ports    = [22, 80, 443, 3000]
   region           = "eu-west-3"

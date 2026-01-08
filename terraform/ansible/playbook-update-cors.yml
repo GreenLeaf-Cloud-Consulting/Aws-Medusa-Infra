@@ -12,8 +12,11 @@
         DATABASE_URL=postgres://postgres:postgres@postgres:5432/medusa-store
         REDIS_URL=redis://redis:6379
         NODE_ENV=development
-        STORE_CORS=http://{{ frontend_ip }}:3000,http://{{ frontend_ip }},http://{{ frontend_ip }}:80
-        ADMIN_CORS=http://{{ frontend_ip }}:3000,http://{{ frontend_ip }},http://{{ frontend_ip }}:80
+        STORE_CORS=http://{{ frontend_ip }},http://{{ frontend_ip }}:80
+        ADMIN_CORS=http://{{ frontend_ip }},http://{{ frontend_ip }}:80
+        AUTH_CORS=http://{{ frontend_ip }},http://{{ frontend_ip }}:80
+        JWT_SECRET=supersecret
+        COOKIE_SECRET=supersecret
         EOF'
       args:
         chdir: "/home/{{ ansible_user }}/Aws-Medusa-Infra"
