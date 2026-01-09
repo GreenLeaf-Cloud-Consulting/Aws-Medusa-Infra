@@ -1,0 +1,38 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: medusa-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - medusa-network
+
+  medusa:
+    build: .
+    container_name: medusa-backend
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "9000:9000"
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=1536
+      - CI=true
+    env_file:
+      - .env
+    volumes:
+      - .:/server
+      - /server/node_modules
+    networks:
+      - medusa-network
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  medusa-network:
+    driver: bridge
