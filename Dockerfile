@@ -13,6 +13,9 @@ RUN npm install --legacy-peer-deps
 # Copy source code
 COPY . .
 
+# Build Medusa for production (baked into Docker image)
+RUN npm run build
+
 # Expose the port Medusa runs on
 EXPOSE 9000
 
