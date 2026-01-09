@@ -16,5 +16,24 @@ module.exports = defineConfig({
       ssl: false,
       sslmode: "disable",
     },
-  }
+  },
+  admin: {
+    vite: (config) => {
+      return {
+        ...config,
+        server: {
+          ...config.server,
+          host: "0.0.0.0",
+          // Allow all hosts in production (ALB, direct IPs, etc.)
+          allowedHosts: "all",
+          hmr: {
+            ...config.server?.hmr,
+            port: 5173,
+            clientPort: 5173,
+          },
+        },
+      }
+    },
+  },
 })
+
