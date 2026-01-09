@@ -19,22 +19,20 @@ module.exports = defineConfig({
     },
   },
   admin: {
-    vite: (config) => {
-      return {
-        ...config,
-        server: {
-          ...config.server,
-          host: "0.0.0.0",
-          // Allow all hosts in production (ALB, direct IPs, etc.)
-          allowedHosts: "all",
-          hmr: {
-            ...config.server?.hmr,
-            port: 5173,
-            clientPort: 5173,
-          },
+    disable: false,
+    path: '/app',
+    vite: () => ({
+      server: {
+        host: "0.0.0.0",
+        strictPort: false,
+        // Allow all hosts (ALB URLs, direct IP, etc.)
+        allowedHosts: ["*"],
+        hmr: {
+          port: 5173,
+          clientPort: 5173,
         },
-      }
-    },
+      },
+    }),
   },
 })
 
